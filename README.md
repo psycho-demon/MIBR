@@ -28,13 +28,10 @@ We use two public real-world datasets (Taobao, Alipay) in our experiments. We pr
 If you have downloaded the source codes, you can train MIBR model.
 
 ```
-$ cd main
-$ python train.py --dataset=[dataset] --strategy=[strategy]  --gpu==[gpu_id] 
+$ cd taobao_train or cd alipay_train
+$ python mibr_train.py 
 ```
 
-The options for command parameter "strategy" are ['1,1',  '1+1',  'n,1',  'n+1'].
-
-You can change the model parameters in `./config/configs.py`
 
 
 
