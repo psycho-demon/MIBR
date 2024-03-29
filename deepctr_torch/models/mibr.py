@@ -466,7 +466,7 @@ class MIBR(BaseModel):
 class MIRM(nn.Module):
     def __init__(self, hidden_size, num_channel=3, sparsity_threshold=0.01):
         super().__init__()
-        assert hidden_size % num_channel == 0, f"hidden_size {hidden_size} should be divisble by num_blocks {num_blocks}"
+        assert hidden_size % num_channel == 0, f"hidden_size {hidden_size} should be divisble by num_blocks {num_channel}"
 
         self.hidden_size = hidden_size
         self.sparsity_threshold = sparsity_threshold
@@ -486,8 +486,7 @@ class MIRM(nn.Module):
         k = self.num_blocks
         e = E // k
         x = x.reshape(B, L, k, e)
-        x = torch.fft.rfft(x, dim=1, norm="ortho")  # 对L做FFT变换
-        # 0初始化线性组合后的结果，后面可以看出0初始化只需要部分赋值即可实现截断
+        x = torch.fft.rfft2(x, dim=(2, 1), norm="ortho")
         o1_real = torch.zeros([B, x.shape[1], k, e], device=x.device)
         o1_imag = torch.zeros([B, x.shape[1], k, e], device=x.device)
         o2_real = torch.zeros(x.shape, device=x.device)
@@ -520,7 +519,7 @@ class MIRM(nn.Module):
         x = torch.stack([o2_real, o2_imag], dim=-1)
         x = F.softshrink(x, lambd=self.sparsity_threshold)
         x = torch.view_as_complex(x)
+        x = torch.fft.irfft2(x, dim=(2, 1), norm='ortho')
         x = x.reshape(B, x.shape[1], E)
-        x = torch.fft.irfft(x, n=L, dim=1, norm='ortho')
         x = x.type(dtype)
         return x + bias
