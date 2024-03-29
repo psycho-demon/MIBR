@@ -52,7 +52,7 @@ class MIBR(BaseModel):
                  l2_reg_embedding=1e-6, dnn_dropout=0, init_std=0.1,
                  seed=1024, task='binary', device='cpu', gpus=None,
                  short_long_length=(16, 256),
-                 hash_bits=4,
+                 hash_bits=16,
                  retrieval=8,
                  ):
         super(MIBR, self).__init__([], dnn_feature_columns, l2_reg_linear=0, l2_reg_embedding=l2_reg_embedding,
@@ -105,6 +105,9 @@ class MIBR(BaseModel):
         # multi-granularity interest refinement module
         self.fft_block = MIRM(self.att_emb_dim * 3, num_channel=3)
         self.aspect_weight = nn.Parameter(torch.randn(3, 1), requires_grad=True)
+        self.J1 = 0
+        self.J2 = 0
+        self.J3 = 0
         self.to(device)
 
     def forward(self, X):
@@ -150,18 +153,21 @@ class MIBR(BaseModel):
 
         # target-aware search unit
         query_target = query_emb
-        token1, _ = self.search_topk_by_lsh(query_target, keys_emb, keys_length)
+        token1, index1, _ = self.search_topk_by_lsh(query_target, keys_emb, keys_length)
 
         # local-aware search unit
         query_local = self.query_local_modeling(query_emb, short_keys_emb)
-        token2, _ = self.search_topk_by_lsh(query_local, keys_emb, keys_length)
+        token2, index2, _ = self.search_topk_by_lsh(query_local, keys_emb, keys_length)
 
         # global-aware search unit
         query_global = self.query_global_modeling(X, query_emb)
-        token3, _ = self.search_topk_by_lsh(query_global, keys_emb, keys_length)
+        token3, index3, _ = self.search_topk_by_lsh(query_global, keys_emb, keys_length)
 
         # cat
         token_emb = torch.cat((token1, token2, token3), dim=-1)
+        self.J1 += self.jaccard_similarity(index1, index2)
+        self.J2 += self.jaccard_similarity(index1, index3)
+        self.J3 += self.jaccard_similarity(index2, index3)
 
         # refinement
         token_input = token_emb
@@ -234,7 +240,17 @@ class MIBR(BaseModel):
 
         topk_key = key.gather(1, index.unsqueeze(-1).expand(index.shape[0], index.shape[1], key.shape[-1]))
         topk_length = (index >= mask_length.unsqueeze(dim=-1)).sum(-1)
-        return topk_key, topk_length
+        return topk_key, index, topk_length
+
+    def jaccard_similarity(self, tensor1, tensor2):
+        j = 0
+        for i in range(len(tensor1)):
+            a = tensor1[i]
+            b = tensor2[i]
+            intersection = len(set(a.tolist()) & set(b.tolist()))
+            union = len(set(a.tolist()) | set(b.tolist()))
+            j += intersection / union
+        return j
 
     def fit(self, x=None, y=None, batch_size=None, epochs=1, verbose=1, initial_epoch=0, validation_split=0.,
             validation_data=None, shuffle=True, callbacks=None):
