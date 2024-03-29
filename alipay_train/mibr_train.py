@@ -49,7 +49,7 @@ if __name__ == "__main__":
     print(f'test_len: {len(test_y)}')
 
     model = MIBR(feature_columns, behavior_feature_list, device=device, att_weight_normalization=True, dnn_use_bn=True,
-                 short_long_length=(16, 256), hash_bits=4, retrieval=8)
+                 short_long_length=(16, 256), hash_bits=32, retrieval=16)
     model.compile('adam', 'binary_crossentropy',
                   metrics=['auc', 'logloss'])
 
